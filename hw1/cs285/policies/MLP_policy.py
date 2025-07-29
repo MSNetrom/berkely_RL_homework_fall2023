@@ -129,7 +129,14 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         # through it. For example, you can return a torch.FloatTensor. You can also
         # return more flexible objects, such as a
         # `torch.distributions.Distribution` object. It's up to you!
-        raise NotImplementedError
+        
+
+        mean = self.mean_net(observation)
+        std = torch.exp(self.logstd)
+
+        return torch.distributions.Normal(mean, std)
+        
+
 
     def update(self, observations, actions):
         """
@@ -141,8 +148,53 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
             dict: 'Training Loss': supervised learning loss
         """
         # TODO: update the policy and return the loss
-        loss = TODO
+        
+        # Convert numpy arrays to tensors
+        observations = ptu.from_numpy(observations)
+        actions = ptu.from_numpy(actions)
+        
+        action_distribution = self.forward(observations)
+        log_prob = action_distribution.log_prob(actions)
+        loss = -log_prob.mean()
+        
+        # Perform gradient update
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
         return {
             # You can add extra logging information here, but keep this line
             'Training Loss': ptu.to_numpy(loss),
         }
+
+    def get_action(self, obs: np.ndarray) -> np.ndarray:
+        """
+        Query the policy with observation(s) to get action(s).
+        
+        :param obs: observation(s) to query the policy
+        :return: sampled action(s)
+        """
+
+        with torch.no_grad():
+            if len(obs.shape) > 1:
+                observation = obs
+            else:
+                observation = obs[None, :]
+            
+            # Convert to tensor
+            observation = ptu.from_numpy(observation.astype(np.float32))
+            
+            # Get action distribution
+            action_dist = self.forward(observation)
+            
+            # Sample action
+            action = action_dist.sample()
+            
+            # Convert back to numpy
+            action = ptu.to_numpy(action)
+            
+            # Remove batch dimension for single observations
+            if len(obs.shape) == 1:
+                action = action[0]
+            
+        return action

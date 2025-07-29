@@ -1,3 +1,7 @@
+## Custom
+
+``sudo apt-get install swig``
+
 ## Install dependencies
 
 There are two options:
